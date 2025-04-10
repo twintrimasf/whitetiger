@@ -693,26 +693,28 @@ function Bridge:InternalRequest(body, timeout)
 			}
 		}
 		local result = sendRequest(options, timeout)
+
+		if type(result) ~= 'table' or not result.StatusCode then
+            error("Invalid response from server", 2)
+        end
+
 		local statusCode = tonumber(result.StatusCode)
 		if statusCode and statusCode >= 200 and statusCode < 300 then
 			return result.Body or true
 		end
 
-		local success, result = pcall(function()
-			local decoded = HttpService:JSONDecode(result.Body)
-			if decoded and type(decoded) == "table" then
-				return decoded.error
-			end
-		end)
-
-		if success and result then
-			error(result, 2)
-			return
-		end		
-
-		error("An unknown error occured by the server.", 2)
-		return
-	end
+		local errorMsg = "An unknown error occurred"
+        if type(result.Body) == "string" then
+            local success, decoded = pcall(HttpService.JSONDecode, HttpService, result.Body)
+            if success and type(decoded) == "table" and decoded.error then
+                errorMsg = decoded.error
+            elseif not success and result.Body:match("^{") == nil then
+                errorMsg = result.Body
+            end
+        end
+        
+        error(errorMessage, 2)
+    end
 
 	local success = pcall(function()
 		body = HttpService:JSONEncode(body)
@@ -900,59 +902,67 @@ end
 -- end
 
 function Bridge:loadstring(source, chunkName)
-	local cachedModules = {}
-	local coreModule = workspace.Parent.Clone(coreModules[math.random(1, #coreModules)])
-	coreModule:ClearAllChildren()
-	coreModule.Name = HttpService:GenerateGUID(false) .. ":" .. chunkName
-	coreModule.Parent = OxygenContainer
-	table.insert(cachedModules, coreModule)
+    local cachedModules = {}
+    local maxRetries = 3
+    local retryCount = 0
+    
+    while retryCount < maxRetries do
+        local coreModule = workspace.Parent.Clone(coreModules[math.random(1, #coreModules)])
+        coreModule:ClearAllChildren()
+        coreModule.Name = HttpService:GenerateGUID(false) .. ":" .. chunkName
+        coreModule.Parent = OxygenContainer
+        table.insert(cachedModules, coreModule)
 
-	local result = self:InternalRequest({
-		['Url'] = self.serverUrl .. "/loadstring?n=" .. coreModule.Name .. "&cn=" .. chunkName .. "&pid=0",
-		['ct'] = source
-	})
-	
-	if result then
-		local clock = tick()
-		while task.wait() do
-			local required = nil
-			pcall(function()
-				required = _require(coreModule)
-			end)
+        local success, result = pcall(function()
+            return self:InternalRequest({
+                ['Url'] = self.serverUrl .. "/loadstring?n=" .. coreModule.Name .. "&cn=" .. chunkName .. "&pid=0",
+                ['ct'] = source
+            })
+        end)
+        
+        if not success then
+            for _, module in pairs(cachedModules) do
+                pcall(function() module:Destroy() end)
+            end
 
-			if type(required) == "table" and required[chunkName] and type(required[chunkName]) == "function" then -- add better checks
-				if (#cachedModules > 1) then
-					for _, module in pairs(cachedModules) do
-						if module == coreModule then continue end
-						module:Destroy()
-					end
-				end
-				return required[chunkName]
-			end
+            cachedModules = {}
+            retryCount = retryCount + 1
+            if retryCount >= maxRetries then
+                warn("[Oxygen]: loadstring failed after "..maxRetries.." attempts: "..result)
+                return nil, result
+            end
 
-			if (tick() - clock > 5) then
-				warn("[Oxygen]: loadstring failed and timed out")
-				for _, module in pairs(cachedModules) do
-					module:Destroy()
-				end
-				return nil, "loadstring failed and timed out"
-			end
+			task.wait(0.5)
+            continue
+        end
 
-			task.wait(.06)
+        local clock = tick()
+        while task.wait(0.06) do
+            local required = nil
+            local reqSuccess, reqErr = pcall(function()
+                required = _require(coreModule)
+            end)
 
-			coreModule = workspace.Parent.Clone(coreModules[math.random(1, #coreModules)])
-			coreModule:ClearAllChildren()
-			coreModule.Name = HttpService:GenerateGUID(false) .. ":" .. chunkName
-			coreModule.Parent = OxygenContainer
+            if reqSuccess and type(required) == "table" and required[chunkName] and type(required[chunkName]) == "function" then
+                for _, module in pairs(cachedModules) do
+                    if module ~= coreModule then
+                        pcall(function() module:Destroy() end)
+                    end
+                end
+                return required[chunkName]
+            end
 
-			self:InternalRequest({
-				['Url'] = self.serverUrl .. "/loadstring?n=" .. coreModule.Name .. "&cn=" .. chunkName .. "&pid=0",
-				['ct'] = source
-			})
-
-			table.insert(cachedModules, coreModule)
-		end
-	end
+            if (tick() - clock > 5) then
+                warn("[Oxygen]: loadstring timed out")
+                for _, module in pairs(cachedModules) do
+                    pcall(function() module:Destroy() end)
+                end
+                return nil, "loadstring timed out"
+            end
+        end
+    end
+    
+    return nil, "Max retries exceeded"
 end
 
 function Bridge:request(options)
