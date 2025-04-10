@@ -903,7 +903,7 @@ end
 
 function Bridge:loadstring(source, chunkName)
     local cachedModules = {}
-    local maxRetries = 3
+    local maxRetries = 25
     local retryCount = 0
     
     while retryCount < maxRetries do
