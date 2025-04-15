@@ -1272,7 +1272,7 @@ function Oxygen.request(options)
 	if (options.Headers["User-Agent"]) then assert(type(options.Headers["User-Agent"]) == "string", "invalid option 'User-Agent' for argument #1 to 'request.Header' (string expected, got " .. type(options.Url) .. ") ", 2) end
 	options.Headers["User-Agent"] = options.Headers["User-Agent"] or "OxyU"
 	options.Headers["Exploit-Guid"] = tostring(hwid)
-	options.Headers["OxyU-Fingerprint"] = tostring(hwid)
+	options.Headers["oxyu-fingerprint"] = tostring(hwid)
 	options.Headers["Roblox-Place-Id"] = tostring(game.PlaceId)
 	options.Headers["Roblox-Game-Id"] = tostring(game.JobId)
 	options.Headers["Roblox-Session-Id"] = HttpService:JSONEncode({
