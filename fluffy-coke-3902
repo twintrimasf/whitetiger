@@ -1957,7 +1957,8 @@ function Oxygen.getexecutorversion()
 end
 
 function Oxygen.identifyexecutor()
-	return Oxygen.getexecutorname(), Oxygen.getexecutorversion()
+	-- return Oxygen.getexecutorname(), Oxygen.getexecutorversion()
+	return "Xeno"
 end
 Oxygen.whatexecutor = Oxygen.identifyexecutor
 
