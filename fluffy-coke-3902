@@ -488,7 +488,7 @@ local cached_protected_services = { }
 _G.Oxygen = Oxygen
 
 if script.Name == "VRNavigation" then
-    warn("[Oxygen-U] Initialized - Made by oxygenu.net")
+    warn("Azrix made by azrix.net")
 end
 
 local lookupValueToCharacter = buffer.create(64)
